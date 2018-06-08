@@ -22,16 +22,16 @@ class Net(object):
         for (var_name, var) in vars_dict.items():
             setattr(self, var_name, var)
 
-    def _prepare_vars(self, requires_grad):
+    def _prepare(self, requires_grad):
         for var_name in self._var_names:
             var = getattr(self, var_name)
             var = torch.tensor(var, requires_grad=requires_grad).cuda()
             setattr(self, var_name, var)
 
-    def _prepare_losses(self):
-        for loss_name in self._loss_names:
-            loss = getattr(self, loss_name)
-            setattr(self, loss_name, loss.item())
+    def _process(self):
+        for var_name in self._loss_names + self._metric_names:
+            var = getattr(self, var_name)
+            setattr(self, var_name, var.item())
 
     def _log(self):
         strings = [
@@ -44,13 +44,13 @@ class Net(object):
         print('\t'.join(strings))
 
     def _summarize(self):
-        for loss_name in self._loss_names:
-            loss = getattr(self, loss_name)
+        for var_name in self._loss_names + self._metric_names:
+            var = getattr(self, var_name)
 
             if self.writer is not None:
                 self.writer.add_scalar(
-                    '{:s}/{:s}'.format(self.name, loss_name),
-                    loss,
+                    '{:s}/{:s}'.format(self.name, var_name),
+                    var,
                     self.num_step,
                 )
 
@@ -65,11 +65,17 @@ class Net(object):
 
             self.pre_batch()
 
-            losses_dict = self.step_batch()
+            result = self.step_batch()
+            losses_dict = result['loss']
+            metrics_dict = result['metrics']
+
             losses_dict['loss'] = sum(losses_dict.values())
 
             self._loss_names = losses_dict.keys()
             self._register_vars(losses_dict)
+
+            self._metric_names = metrics_dict.keys()
+            self._register_vars(metrics_dict)
 
             self.post_batch()
 
@@ -97,6 +103,7 @@ class TrainMixin(object):
         self.saver = saver
 
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+
         if lr_decay_epochs is None:
             self.scheduler = None
         else:
@@ -120,18 +127,18 @@ class TrainMixin(object):
         self.optimizer.load_state_dict(state_dict['optimizer'])
 
     def pre_batch(self):
-        self._prepare_vars(requires_grad=True)
+        self._prepare(requires_grad=True)
 
     def post_batch(self):
         self._optimize()
-        self._prepare_losses()
+        self._process()
 
         self._log()
 
         if (self.num_step % self.summarize_steps == 0):
             self._summarize()
 
-        if (self.num_step % self.save_steps == 0):
+        if (self.save_steps is not None) and (self.num_step % self.save_steps == 0):
             self.save()
 
     def pre_epoch(self):
@@ -160,25 +167,28 @@ class TestMixin(object):
         self.model.load_state_dict(state_dict['model'])
 
     def pre_batch(self):
-        self._prepare_vars(requires_grad=False)
+        self._prepare(requires_grad=False)
 
     def post_batch(self):
-        self._prepare_losses()
+        self._process()
 
-        for loss_name in self._loss_names:
-            if loss_name in self._losses:
-                _loss = self._losses[loss_name]
+        for var_name in self._loss_names + self._metric_names:
+            if var_name in self._loss_metrics:
+                _var = self._loss_metrics[var_name]
             else:
-                _loss = 0.
+                _var = 0
 
-            loss = getattr(self, loss_name)
-            self._losses[loss_name] = _loss + (loss - _loss) / (self.num_batch + 1)
+            var = getattr(self, var_name)
+            self._loss_metrics[var_name] = _var + (var - _var) / (self.num_batch + 1)
 
         self._log()
 
     def pre_epoch(self):
         self.model.eval()
-        self._losses = {}
+        self._loss_metrics = {}
 
     def post_epoch(self):
+        for var_name in self._loss_names + self._metric_names:
+            setattr(self, var_name, self._loss_metrics[var_name])
+
         self._summarize()
