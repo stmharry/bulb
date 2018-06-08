@@ -1,3 +1,4 @@
+import itertools
 import torch
 
 from bulb.saver import Saver
@@ -29,7 +30,7 @@ class Net(object):
             setattr(self, var_name, var)
 
     def _process(self):
-        for var_name in self._loss_names + self._metric_names:
+        for var_name in itertools.chain(self._loss_names, self._metric_names):
             var = getattr(self, var_name)
             setattr(self, var_name, var.item())
 
@@ -44,7 +45,7 @@ class Net(object):
         print('\t'.join(strings))
 
     def _summarize(self):
-        for var_name in self._loss_names + self._metric_names:
+        for var_name in itertools.chain(self._loss_names, self._metric_names):
             var = getattr(self, var_name)
 
             if self.writer is not None:
@@ -176,7 +177,7 @@ class TestMixin(object):
     def post_batch(self):
         self._process()
 
-        for var_name in self._loss_names + self._metric_names:
+        for var_name in itertools.chain(self._loss_names, self._metric_names):
             if var_name in self._loss_metrics:
                 _var = self._loss_metrics[var_name]
             else:
@@ -192,7 +193,7 @@ class TestMixin(object):
         self._loss_metrics = {}
 
     def post_epoch(self):
-        for var_name in self._loss_names + self._metric_names:
+        for var_name in itertools.chain(self._loss_names, self._metric_names):
             setattr(self, var_name, self._loss_metrics[var_name])
 
         self._summarize()
