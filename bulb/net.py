@@ -66,8 +66,12 @@ class Net(object):
             self.pre_batch()
 
             result = self.step_batch()
-            losses_dict = result['loss']
-            metrics_dict = result['metrics']
+            if ('loss' in result) and ('metrics' in result):
+                losses_dict = result['loss']
+                metrics_dict = result['metrics']
+            else:
+                losses_dict = result
+                metrics_dict = {}
 
             losses_dict['loss'] = sum(losses_dict.values())
 
