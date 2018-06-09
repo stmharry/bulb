@@ -23,10 +23,10 @@ class Net(object):
         for (var_name, var) in vars_dict.items():
             setattr(self, var_name, var)
 
-    def _prepare(self, requires_grad):
+    def _prepare(self):
         for var_name in self._var_names:
             var = getattr(self, var_name)
-            var = torch.tensor(var, requires_grad=requires_grad).cuda()
+            var = torch.tensor(var).cuda()
             setattr(self, var_name, var)
 
     def _process(self):
@@ -93,26 +93,29 @@ class TrainMixin(object):
     name = 'train'
 
     def _init(self,
-              lr,
-              lr_decay_epochs,
-              lr_decay_rate,
-              summarize_steps,
-              save_steps,
-              saver):
+              optimizer=None,
+              lr=None,
+              lr_decay_epochs=None,
+              lr_decay_rate=None,
+              log_steps=1,
+              summarize_steps=1,
+              save_steps=None,
+              saver=None):
 
-        self.lr = lr
-        self.lr_decay_epochs = lr_decay_epochs
-        self.lr_decay_rate = lr_decay_rate
-        self.summarize_steps = summarize_steps
-        self.save_steps = save_steps
-        self.saver = saver
-
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        if optimizer is not None:
+            self.optimizer = optimizer
+        elif lr is not None:
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 
         if lr_decay_epochs is None:
             self.scheduler = None
         else:
             self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=self.lr_decay_epochs, gamma=self.lr_decay_rate)
+
+        self.log_steps = log_steps
+        self.summarize_steps = summarize_steps
+        self.save_steps = save_steps
+        self.saver = saver
 
     def _optimize(self):
         self.optimizer.zero_grad()
@@ -132,13 +135,14 @@ class TrainMixin(object):
         self.optimizer.load_state_dict(state_dict['optimizer'])
 
     def pre_batch(self):
-        self._prepare(requires_grad=True)
+        self._prepare()
 
     def post_batch(self):
         self._optimize()
         self._process()
 
-        self._log()
+        if (self.num_step % self.log_steps == 0):
+            self._log()
 
         if (self.num_step % self.summarize_steps == 0):
             self._summarize()
@@ -172,7 +176,7 @@ class TestMixin(object):
         self.model.load_state_dict(state_dict['model'])
 
     def pre_batch(self):
-        self._prepare(requires_grad=False)
+        self._prepare()
 
     def post_batch(self):
         self._process()
@@ -186,14 +190,14 @@ class TestMixin(object):
             var = getattr(self, var_name)
             self._loss_metrics[var_name] = _var + (var - _var) / (self.num_batch + 1)
 
-        self._log()
 
     def pre_epoch(self):
         self.model.eval()
         self._loss_metrics = {}
 
     def post_epoch(self):
-        for var_name in itertools.chain(self._loss_names, self._metric_names):
+        for var_name in self._loss_metrics.keys():
             setattr(self, var_name, self._loss_metrics[var_name])
 
+        self._log()
         self._summarize()
