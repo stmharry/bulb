@@ -35,5 +35,5 @@ class Saver(object):
         with open(Saver.meta_path(self.working_dir), 'w') as f:
             json.dump(meta, f, indent=4)
 
-    def save_model(self, state_dict, num_step):
-        torch.save(state_dict, Saver.model_path(self.working_dir, num_step))
+    def save_model(self, obj, num_step):
+        torch.save(obj, Saver.model_path(self.working_dir, num_step))

@@ -7,13 +7,15 @@ from bulb.saver import Saver
 class Net(object):
     def __init__(self,
                  model,
-                 data_loader=None,
                  writer=None,
+                 data_loader=None,
+                 weights_only=True,
                  **kwargs):
 
         self.model = model
         self.writer = writer
         self.data_loader = data_loader
+        self.weights_only = weights_only
 
         self.num_epoch = 0
 
@@ -54,6 +56,37 @@ class Net(object):
                     var,
                     self.num_step,
                 )
+
+    def save(self):
+        assert self.name == 'train'
+
+        if self.weights_only:
+            model = self.model.state_dict()
+            optimizer = self.optimizer.state_dict()
+        else:
+            model = self.model
+            optimizer = self.optimizer
+
+        obj = {
+            'model': model,
+            'optimizer': optimizer,
+        }
+
+        self.saver.save_model(obj, num_step=self.num_step)
+
+    def load(self, ckpt_dir):
+        obj = Saver.load_model(ckpt_dir=ckpt_dir)
+
+        if self.weights_only:
+            self.model.load_state_dict(obj['model'])
+
+            if self.name == 'train':
+                self.optimizer.load_state_dict(obj['optimizer'])
+        else:
+            self.model = obj['model']
+
+            if self.name == 'train':
+                self.optimizer = obj['optimizer']
 
     def step_epoch(self, num_step=None):
         self.pre_epoch()
@@ -122,18 +155,6 @@ class TrainMixin(object):
         self.loss.backward()
         self.optimizer.step()
 
-    def save(self):
-        state_dict = {
-            'model': self.model.state_dict(),
-            'optimizer': self.optimizer.state_dict(),
-        }
-        self.saver.save_model(state_dict, num_step=self.num_step)
-
-    def load(self, ckpt_dir=None):
-        state_dict = Saver.load_model(ckpt_dir=ckpt_dir)
-        self.model.load_state_dict(state_dict['model'])
-        self.optimizer.load_state_dict(state_dict['optimizer'])
-
     def pre_batch(self):
         self._prepare()
 
@@ -171,9 +192,13 @@ class TestMixin(object):
     def _init(self):
         pass
 
-    def load(self, ckpt_dir=None):
-        state_dict = Saver.load_model(ckpt_dir=ckpt_dir)
-        self.model.load_state_dict(state_dict['model'])
+    def load(self, ckpt_dir=None, weights_only=True):
+        obj = Saver.load_model(ckpt_dir=ckpt_dir)
+
+        if weights_only:
+            self.model.load_state_dict(obj['model'])
+        else:
+            self.model = obj['model']
 
     def pre_batch(self):
         self._prepare()
