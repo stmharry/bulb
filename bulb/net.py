@@ -138,12 +138,12 @@ class TrainMixin(object):
         if optimizer is not None:
             self.optimizer = optimizer
         elif lr is not None:
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
 
         if lr_decay_epochs is None:
             self.scheduler = None
         else:
-            self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=self.lr_decay_epochs, gamma=self.lr_decay_rate)
+            self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=lr_decay_epochs, gamma=lr_decay_rate)
 
         self.log_steps = log_steps
         self.summarize_steps = summarize_steps
