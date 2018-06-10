@@ -94,7 +94,7 @@ class Net(object):
         for (self.num_batch, vars_dict) in enumerate(self.data_loader):
             self.num_step = num_step or self.num_epoch * len(self.data_loader) + self.num_batch
 
-            self._var_names = vars_dict.keys()
+            self._var_names = list(vars_dict.keys())
             self._register_vars(vars_dict)
 
             self.pre_batch()
@@ -109,10 +109,10 @@ class Net(object):
 
             losses_dict['loss'] = sum(losses_dict.values())
 
-            self._loss_names = losses_dict.keys()
+            self._loss_names = list(losses_dict.keys())
             self._register_vars(losses_dict)
 
-            self._metric_names = metrics_dict.keys()
+            self._metric_names = list(metrics_dict.keys())
             self._register_vars(metrics_dict)
 
             self.post_batch()
