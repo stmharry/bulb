@@ -6,7 +6,7 @@ from bulb.saver import Saver
 
 class Net(object):
     def __init__(self,
-                 model,
+                 model=None,
                  writer=None,
                  data_loader=None,
                  weights_only=True,
@@ -60,6 +60,9 @@ class Net(object):
     def save(self):
         assert self.name == 'train'
 
+        if self.saver is None:
+            return
+
         if self.weights_only:
             model = self.model.state_dict()
             optimizer = self.optimizer.state_dict()
@@ -82,11 +85,17 @@ class Net(object):
 
             if self.name == 'train':
                 self.optimizer.load_state_dict(obj['optimizer'])
+
+            elif (self.name == 'test') or (self.name == 'online'):
+                pass
         else:
             self.model = obj['model']
 
             if self.name == 'train':
                 self.optimizer = obj['optimizer']
+
+            elif (self.name == 'test') or (self.name == 'online'):
+                pass
 
     def step_epoch(self, num_step=None):
         self.pre_epoch()
@@ -100,14 +109,16 @@ class Net(object):
             self.pre_batch()
 
             result = self.step_batch()
-            if ('loss' in result) and ('metrics' in result):
+
+            metrics_dict = {}
+            if 'loss' in result:
                 losses_dict = result['loss']
-                metrics_dict = result['metrics']
+                if 'metrics' in result:
+                    metrics_dict = result['metrics']
             else:
                 losses_dict = result
-                metrics_dict = {}
 
-            losses_dict['loss'] = sum(losses_dict.values())
+            losses_dict['loss'] = torch.tensor(0.0).cuda() + sum(losses_dict.values())
 
             self._loss_names = list(losses_dict.keys())
             self._register_vars(losses_dict)
@@ -192,14 +203,6 @@ class TestMixin(object):
     def _init(self):
         pass
 
-    def load(self, ckpt_dir=None, weights_only=True):
-        obj = Saver.load_model(ckpt_dir=ckpt_dir)
-
-        if weights_only:
-            self.model.load_state_dict(obj['model'])
-        else:
-            self.model = obj['model']
-
     def pre_batch(self):
         self._prepare()
 
@@ -214,7 +217,6 @@ class TestMixin(object):
 
             var = getattr(self, var_name)
             self._loss_metrics[var_name] = _var + (var - _var) / (self.num_batch + 1)
-
 
     def pre_epoch(self):
         self.model.eval()
